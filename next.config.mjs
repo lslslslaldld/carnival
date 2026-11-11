@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Optional local/deployment fallback. Environment variables take precedence.
-// Never put real credentials in a tracked file; settings.json is gitignored.
+// On Amplify, app settings/environment variables are the source of truth.
+// A local settings.json is only a development fallback and must never override
+// or substitute for Amplify's configured environment variables.
+const isAmplify = Boolean(process.env.AWS_APP_ID);
 const settingsPath = path.join(process.cwd(), 'settings.json');
-if (fs.existsSync(settingsPath)) {
+if (!isAmplify && fs.existsSync(settingsPath)) {
   try {
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
     if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
