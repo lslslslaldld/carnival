@@ -1,8 +1,11 @@
-import { NextResponse } from 'next/server';
-import { getUserContext } from '@/lib/admin';
-export default async function middleware(request: Request) {
-  const url = new URL(request.url);
-  if (url.pathname.startsWith('/admin') && !(await getUserContext())) return NextResponse.redirect(new URL('/sign-in', request.url));
-  return NextResponse.next();
-}
-export const config = { matcher: ['/admin/:path*'] };
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher(['/admin(.*)', '/dashboard(.*)']);
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) await auth.protect();
+});
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};

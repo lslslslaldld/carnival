@@ -1,51 +1,71 @@
 # Carnival
 
-Next.js admin/content app using Amazon Cognito for authentication and authorization. Neon Postgres remains the persistence layer for editable homepage content and registration settings. File uploads are intentionally disabled.
+Clerk-authenticated Next.js admin/content app prepared for Tencent EdgeOne Makers. File uploads are intentionally disabled. Dynamic page text and signup settings use managed Neon Postgres, not the local filesystem.
 
-## Requirements
+## Requirements and services
 
-- Node.js 20+ and npm
-- An Amazon Cognito User Pool with an app client (no client secret for browser authentication)
-- AWS credentials for server-side Cognito user administration (IAM role in deployment; local AWS profile for development)
-- Neon Postgres database
+- Node.js 20 or newer and npm
+- A Clerk application
+- A Neon Postgres database (or another PostgreSQL service with a compatible HTTP driver; this project uses Neon serverless)
+- Tencent Cloud EdgeOne Makers project connected to this GitHub repository
 
-## Cognito setup
+The app does not write uploads, settings, or page text to the local filesystem. User identities/actions are managed by Clerk; app settings and homepage HTML are stored in Postgres. Use production-grade secrets and domain configuration for deployment.
 
-1. Create a Cognito User Pool. Enable email as a sign-in option and require email verification. Configure a password policy and email delivery.
-2. Create a public app client without a client secret. Enable `ALLOW_USER_PASSWORD_AUTH` and `ALLOW_REFRESH_TOKEN_AUTH`; configure email verification and password reset.
-3. Set `AWS_REGION`, `COGNITO_USER_POOL_ID`, `NEXT_PUBLIC_COGNITO_USER_POOL_ID`, and `NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID` in the runtime environment.
-4. Set `ADMIN_EMAILS` to a comma-separated list of administrator email addresses. Only verified Cognito identities on this allowlist can access admin endpoints.
-5. The app creates an HttpOnly, SameSite=Lax session cookie after Cognito authentication. Production deployments must use HTTPS.
+## Configure Clerk
 
-The signup toggle in the admin panel gates this app's signup page. To prevent signups through other clients or APIs, also restrict self-service registration in Cognito or enforce the policy with a Cognito pre-sign-up Lambda trigger.
+1. Create a Clerk application and enable the email/password or other sign-in methods you want.
+2. Add the deployed EdgeOne domain to Clerk's allowed origins/redirect URLs per the Clerk dashboard.
+3. Set the following environment variables in EdgeOne Makers for the deployment environment:
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+   - `CLERK_SECRET_KEY` (secret; server only)
+   - `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in`
+   - `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`
+   - `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/admin`
+   - `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/admin`
+   - `ADMIN_EMAILS=troy@troysmithson.com` (Troy is always included by the app)
+4. Verify `troy@troysmithson.com` in Clerk before opening `/admin`. The app checks verified email addresses server-side; it does not trust browser-supplied admin flags.
 
-## AWS permissions for user administration
+## Configure persistent database
 
-The server runtime must receive AWS credentials through an IAM role (recommended) or a local AWS profile. Grant only the required actions against this user pool: `cognito-idp:ListUsers`, `cognito-idp:AdminGetUser`, `cognito-idp:AdminDisableUser`, `cognito-idp:AdminEnableUser`, and `cognito-idp:AdminResetUserPassword`. Never place AWS access keys in `NEXT_PUBLIC_` variables or browser code.
+1. Create a Neon project/database and copy its pooled or serverless connection string.
+2. Add `DATABASE_URL` to EdgeOne Makers environment variables as a secret. Do not commit credentials or expose this value with a `NEXT_PUBLIC_` prefix.
+3. The app creates `carnival_app_data` on first request and stores `settings` and `site-content` as JSONB records. For stricter production operations, run the schema in `db/schema.sql` as a migration strategy.
+4. The database must accept HTTPS serverless connections from the deployed app. If using a different PostgreSQL provider, test its driver/runtime compatibility first.
 
-## Persistent data
+## Deploy with EdgeOne Makers
 
-Set `DATABASE_URL` to the Neon Postgres connection string as a server-side secret. Settings and homepage HTML continue to be stored there; this migration changes authentication only.
+1. Push this repository to GitHub and connect it in the Tencent Cloud EdgeOne Makers console.
+2. Select the repository and `main` branch. Choose the Next.js framework preset if offered.
+3. Configure the build command as `npm run build`. Use the platform's Next.js full-stack/SSR deployment mode; do not select static export (`output: export`) because Clerk auth and admin route handling require server runtime.
+4. Add the Clerk and `DATABASE_URL` variables to the project's environment-variable settings for Preview and Production as appropriate. Mark secret values as secret.
+5. Deploy. Visit `/`, `/sign-in`, `/sign-up`, then log in as the verified admin and open `/admin`.
+6. Check the Makers build and function logs. Test signup close/open, page content save/reload, and user actions in a non-production Clerk instance first.
+7. Attach a custom domain and configure the same production URL in Clerk's allowed domains/redirect configuration.
+
+EdgeOne Makers product features and UI labels can differ by region/account. Confirm the current Next.js SSR deployment/runtime and environment-variable workflow in the Makers console/docs. This combination works best with SSR hosting.
 
 ## Local development
 
 ```bash
 cp .env.example .env.local
-# Set Cognito and database values; configure AWS credentials with your normal AWS profile/role
+# Fill in Clerk keys and DATABASE_URL
 npm install
 npm run dev
 ```
 
-Run `npm run build` to validate a production build. Never commit `.env.local`.
+Then use `npm run build` to check the production build. Never add `.env.local` to Git.
 
-## Deploy
+## Security and operational notes
 
-Deploy the existing Next.js app to a Node.js-compatible hosting service (including Amplify Hosting with SSR support). Configure the same Cognito callback/origin domain as appropriate for the app client, set the environment variables above, and attach an IAM role with the least-privilege Cognito actions. Verify `/sign-in`, email-confirmed `/sign-up`, forgot-password, `/admin`, user administration, homepage edits, and sign-out in a non-production pool first.
+- Admin authorization is checked server-side using Clerk's server SDK and verified email.
+- The homepage editor output is sanitized both when saved and when read.
+- Account state-changing actions are server-side Clerk calls. Password resets remain in Clerk's built-in user-initiated "Forgot password" flow; the app does not send custom reset emails.
+- Security headers are configured in `next.config.mjs`; test Clerk sign-in and any custom domain after deployment because a restrictive Content Security Policy may need the Clerk domains for your environment.
+- Signup setting/content are dynamic and backed by Postgres. Keep DB connection secrets private and take database backups.
+- File upload endpoints remain disabled; no `/files` uploads are offered.
 
-## Security notes
+## Project scripts
 
-- Every protected API request verifies the Cognito ID token signature, issuer, expiration, token use, and app-client audience on the server.
-- Admin access is based on verified email and the server-only `ADMIN_EMAILS` allowlist; do not rely on browser-provided roles.
-- The ID token is stored in an HttpOnly cookie; client-side Amplify auth remains responsible for sign-in and token refresh. If a Cognito token expires, sign in again to refresh the server session.
-- Homepage HTML continues to be sanitized before saving and rendering.
-- File upload endpoints remain disabled.
+- `npm run dev` — local Next.js development server
+- `npm run build` — production build
+- `npm start` — local production server

@@ -1,42 +1,32 @@
-import { CognitoJwtVerifier } from 'aws-jwt-verify';
-import { cookies } from 'next/headers';
+import { clerkClient } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
 
-const sessionCookie = 'carnival-cognito-id-token';
-const poolId = process.env.COGNITO_USER_POOL_ID;
-const clientId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID;
-
-function verifier() {
-  if (!poolId || !clientId) throw new Error('Cognito user pool configuration is missing.');
-  return CognitoJwtVerifier.create({ userPoolId: poolId, tokenUse: 'id', clientId });
-}
-
-export const DEFAULT_ADMIN_EMAILS: string[] = [];
+export const DEFAULT_ADMIN_EMAILS = ['troy@troysmithson.com'];
 
 export function getAdminEmails() {
-  return (process.env.ADMIN_EMAILS ?? '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean);
+  const configured = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  const combined = [...DEFAULT_ADMIN_EMAILS, ...configured];
+  return combined.filter((email, index) => combined.indexOf(email) === index);
 }
 
 export function isAdminEmail(email: string | null | undefined) {
   return Boolean(email && getAdminEmails().includes(email.trim().toLowerCase()));
 }
 
-export async function verifyCognitoToken(token: string) {
-  return verifier().verify(token);
-}
-
-export async function getUserContext() {
-  const token = cookies().get(sessionCookie)?.value;
-  if (!token) return null;
-  try {
-    const claims = await verifyCognitoToken(token);
-    return { token, claims, user: { id: claims.sub, email: typeof claims.email === 'string' ? claims.email : '', emailVerified: claims.email_verified === true || claims.email_verified === 'true' } };
-  } catch {
-    return null;
-  }
-}
-
+/** Resolve the signed-in user from Clerk on the server; never trust client metadata. */
 export async function getAdminContext() {
-  const context = await getUserContext();
-  if (!context || !context.user.emailVerified || !isAdminEmail(context.user.email)) return null;
-  return context;
+  const { userId } = await auth();
+  if (!userId) return null;
+
+  const client = await clerkClient();
+  const user = await client.users.getUser(userId);
+  const verifiedEmails = user.emailAddresses
+    .filter((entry) => entry.verification?.status === 'verified')
+    .map((entry) => entry.emailAddress.toLowerCase());
+
+  if (!verifiedEmails.some(isAdminEmail)) return null;
+  return { client, user };
 }

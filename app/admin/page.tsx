@@ -1,9 +1,14 @@
 import { redirect } from 'next/navigation';
-import { getUserContext, getAdminContext } from '@/lib/admin';
+import { currentUser } from '@clerk/nextjs/server';
+import { isAdminEmail } from '@/lib/admin';
 import { AdminDashboard } from '@/components/AdminDashboard';
-export const dynamic = 'force-dynamic';
+
 export default async function AdminPage() {
-  if (!(await getUserContext())) redirect('/sign-in');
-  if (!(await getAdminContext())) redirect('/');
+  const user = await currentUser();
+  if (!user) redirect('/sign-in');
+  const verifiedAdmin = user.emailAddresses.some(
+    (entry) => entry.verification?.status === 'verified' && isAdminEmail(entry.emailAddress),
+  );
+  if (!verifiedAdmin) redirect('/');
   return <main className="admin-shell"><div className="container"><AdminDashboard /></div></main>;
 }
