@@ -1,9 +1,2 @@
-'use client';
-
-import { useEffect } from 'react';
-import { configureAmplify } from '@/lib/amplify-client';
-
-export function AmplifyProvider({ children }: { children: React.ReactNode }) {
-  useEffect(() => { configureAmplify(); }, []);
-  return <>{children}</>;
-}
+// Cognito migration compatibility stub. The app now uses Clerk.
+export {};
