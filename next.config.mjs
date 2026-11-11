@@ -1,3 +1,22 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Optional local/deployment fallback. Environment variables take precedence.
+// Never put real credentials in a tracked file; settings.json is gitignored.
+const settingsPath = path.join(process.cwd(), 'settings.json');
+if (fs.existsSync(settingsPath)) {
+  try {
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
+      for (const [key, value] of Object.entries(settings)) {
+        if (typeof value === 'string' && !process.env[key]) process.env[key] = value;
+      }
+    }
+  } catch (error) {
+    console.error('[config] Could not parse settings.json:', error instanceof Error ? error.message : 'invalid JSON');
+  }
+}
+
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
