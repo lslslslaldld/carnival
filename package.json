@@ -9,8 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.20.0",
-    "@neondatabase/serverless": "^1.0.1",
+    "@aws-sdk/client-cognito-identity-provider": "^3.850.0",
+    "@aws-sdk/credential-provider-node": "^3.850.0",
     "@tiptap/core": "^2.8.0",
     "@tiptap/extension-link": "^2.8.0",
     "@tiptap/extension-text-align": "^2.8.0",
@@ -18,10 +18,13 @@
     "@tiptap/extension-underline": "^2.8.0",
     "@tiptap/react": "^2.8.0",
     "@tiptap/starter-kit": "^2.8.0",
+    "aws-jwt-verify": "^5.0.0",
+    "aws-amplify": "^6.15.0",
     "next": "^14.2.25",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "sanitize-html": "^2.13.0"
+    "sanitize-html": "^2.13.0",
+    "@neondatabase/serverless": "^1.0.1"
   },
   "devDependencies": {
     "@types/node": "20.14.12",

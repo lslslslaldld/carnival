@@ -1,22 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { SignedIn, SignedOut, SignInButton, SignUpButton } from '@clerk/nextjs';
+import { useEffect, useState } from 'react';
+import { fetchAuthSession, getCurrentUser, signOut } from 'aws-amplify/auth';
+import { configureAmplify } from '@/lib/amplify-client';
 
 export function HeaderActions() {
-  return (
-    <>
-      <SignedOut>
-        <SignInButton mode="modal">
-          <button className="primary-btn">Sign in</button>
-        </SignInButton>
-        <SignUpButton mode="modal">
-          <button className="secondary-btn">Create account</button>
-        </SignUpButton>
-      </SignedOut>
-      <SignedIn>
-        <Link href="/admin" className="primary-btn">Open admin</Link>
-      </SignedIn>
-    </>
-  );
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => {
+    configureAmplify();
+    void getCurrentUser().then(() => setSignedIn(true)).catch(() => setSignedIn(false));
+  }, []);
+  async function logOut() {
+    try { await signOut(); } finally { await fetch('/api/auth/session', { method: 'DELETE' }); setSignedIn(false); window.location.assign('/'); }
+  }
+  return signedIn ? <><Link href="/admin" className="primary-btn">Open admin</Link><button className="secondary-btn" onClick={logOut}>Sign out</button></> : <><Link href="/sign-in" className="primary-btn">Sign in</Link><Link href="/sign-up" className="secondary-btn">Create account</Link></>;
 }
